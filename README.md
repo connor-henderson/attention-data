@@ -1,6 +1,12 @@
-# Attention Data
+<div align="center">
 
-Attention patterns are somewhat unique in transformers in that they are mappable back to individual tokens [n_ctx n_ctx] and don't use any embedding dimensions. This makes them amenable to visual interpretation. However, these patterns are part of a larger computation, contributing to an internal representation that the model uses to generate the output and we can't take this too literally.
+![Logo](https://github.com/connor-henderson/attention-data/assets/78612354/6db331f2-0591-4a3a-9276-fd6c970e9298)
+
+</div>
+
+# AttentionData
+
+**Attention patterns** are somewhat unique in transformers in that they are mappable back to individual tokens [n_ctx n_ctx] and don't use any embedding dimensions. This makes them amenable to visual interpretation. However, these patterns are part of a larger computation, contributing to an internal representation that the model uses to generate the output and we can't take this too literally.
 
 Nonetheless, visualizing and generating data on attention patterns can be beneficial for understanding and interpreting the model's behavior. Here, I've attempted to try if the "dumbest and most automatable" thing of passing this attention data to Language Models (LLMs) with proper prompting could potentially help them identify patterns. Since LLMs are trained on language, they might extract meaningful insights from the attention data, especially if it's presented in a language-like format. I've additionally added a few methods for visualizing attention paid in different contexts and ranking tokens by their attention score's multiple of the average score for their row.
 
