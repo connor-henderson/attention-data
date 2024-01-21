@@ -14,7 +14,7 @@ Importantly, the core AttentionData class can be used with any arbitrary combina
 
 ## Usage
 
-[Demo notebook](demo_notebook.ipynb)
+[Demo notebook](https://github.com/connor-henderson/attention-data/blob/main/demo.ipynb)
 
 Instantiate an `AttentionData` class with your chosen passed parameters and call any of the following:
 
