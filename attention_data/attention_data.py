@@ -23,7 +23,8 @@ class AttentionData:
                  openai_api_key: str,
                  text_batch: List[List[str]],
                  min_length = 10,
-                 max_length = 30
+                 max_length = 30,
+                 suppress_first_token = True # Temporary hack for denoising, unprincipled
                  ) -> None:
         self.model = model
         self.openai_model = openai_model
@@ -34,8 +35,9 @@ class AttentionData:
         self.text_batch = text_batch
         self.str_tokens = None
         self.input_ids = None
-        self.cache: ActivationCache = None
+        self.pattern_cache = None
         self.pad_token_id = model.tokenizer.pad_token_id
+        self.suppress_first_token = suppress_first_token
         self.prompt_prefix = ("Here is a row by row break down of which tokens were attended to for each individual generation step for a transformer. "
                               "Each row is labeled with its index and is of the format for each row: `\{text\}\\n{{token} {multiple} for token, multiple in above_avg_tokens}`. "
                               "Notably, the tokens with above average attention are sorted by their score's multiple relative to the average attention score for that row, "
@@ -58,17 +60,28 @@ class AttentionData:
         
         self.str_tokens = str_tokens
         self.input_ids = input_ids
-        self.cache = cache
+        self.pattern_cache = {layer: {head: cache["pattern", layer][:, head, ...] for head in range(self.model.cfg.n_heads)} for layer in range(self.model.cfg.n_layers)}
         
+        del cache
+        
+    
     def create_samples(self, head=0, layer=0):
         print(f"Creating new samples for layer {layer} head {head}")
-        if self.cache is None:
+        if self.pattern_cache is None:
             self._create_cache()
+        
         # Calculate the average score multiples
-        attention_patterns = self.cache["pattern", layer][:, head, ...]
-        avg_scores = 1 / t.arange(1, attention_patterns.shape[1] + 1).float().to(attention_patterns.device)
-        avg_scores = avg_scores.unsqueeze(-1)
-        attention_multiples = attention_patterns / avg_scores
+        if self.suppress_first_token: # Temporary hack for denoising, unprincipled
+            attention_patterns = self.pattern_cache[layer][head]
+            attention_patterns_excluding_first = attention_patterns[:, 1:]
+            avg_scores = attention_patterns_excluding_first.mean(dim=1, keepdim=True)
+            attention_multiples = attention_patterns / avg_scores
+            attention_multiples[:, :, 0] = 0
+        else:
+            attention_patterns = self.pattern_cache[layer][head]
+            avg_scores = 1 / t.arange(1, attention_patterns.shape[1] + 1).float().to(attention_patterns.device)
+            avg_scores = avg_scores.unsqueeze(-1)
+            attention_multiples = attention_patterns / avg_scores
         
         # Create the samples of [((seq_idx, length_idx), score_multiples1), ...]
         samples = []
@@ -145,7 +158,7 @@ class AttentionData:
             (seq_idx, length_idx), multiples = sample
             for (token, multiple) in multiples:
                 str_toks = self.str_tokens[seq_idx][:length_idx+1]
-                attention_pattern = self.cache["pattern", layer][seq_idx, head, length_idx, :length_idx+1]
+                attention_pattern = self.pattern_cache[layer][head][seq_idx, length_idx, :length_idx+1]
                 ranking = [token, multiple, str_toks, attention_pattern]
                 ranked_multiples.append(ranking)
                 
@@ -205,7 +218,11 @@ class AttentionData:
             html_str += f"<td style='border:1px solid black;'>{token}</td>"
             html_str += f"<td style='border:1px solid black;'>{multiple}</td>"
 
-            # Add pattern cells
+            if self.suppress_first_token: # Temporary hack for denoising, unprincipled
+                attention_pattern[0] = 0
+                scale = 1 / t.sum(attention_pattern).item()
+                attention_pattern *= scale
+                
             for i, p in enumerate(attention_pattern.tolist()):
                 # Calculate color intensity based on pattern value (assuming pattern value is between 0 and 1)
                 intensity = int(p * 255)
